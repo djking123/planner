@@ -415,6 +415,48 @@ if (!isset($_SESSION['user_id'])) {
             0% { transform: scale(1); opacity: 0.8; }
             100% { transform: scale(3); opacity: 0; }
         }
+
+        /* Startup Overlay */
+        #startup-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--primary);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        #startup-overlay h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 700; }
+        #startup-overlay p { font-size: 1.1em; opacity: 0.8; margin-bottom: 30px; max-width: 400px; }
+        .startup-card {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+            color: #333;
+        }
+        .startup-card input {
+            font-size: 1.1em;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #eee;
+            border-radius: 12px;
+        }
+        .startup-card input:focus { border-color: var(--accent); outline: none; }
+        .startup-card button {
+            font-size: 1.1em;
+            padding: 15px;
+            border-radius: 12px;
+            background: var(--accent);
+            color: white;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -501,6 +543,20 @@ if (!isset($_SESSION['user_id'])) {
 <button id="fullscreen-map-toggle" onclick="toggleFullscreenMap()" title="Toggle Fullscreen Map">
     <i class="fas fa-expand"></i>
 </button>
+
+<div id="startup-overlay">
+    <div style="margin-bottom: 40px;">
+        <img src="logo.png" alt="Plan&Go" style="height: 60px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));">
+    </div>
+    <h1>Welcome to Plan&Go</h1>
+    <p>Let's start by creating your first trip. Give it a name to begin your adventure!</p>
+    
+    <div class="startup-card">
+        <label style="display: block; text-align: left; font-size: 0.85em; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase;">Trip Name</label>
+        <input type="text" id="first-trip-name" placeholder="e.g. Summer in Italy 🇮🇹">
+        <button onclick="createFirstTrip()">Create Trip & Start Planning</button>
+    </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
@@ -1858,18 +1914,15 @@ if (!isset($_SESSION['user_id'])) {
             body: JSON.stringify({ name: currentTrip })
         });
         alert('Trip deleted!');
-        createNewTrip();
+        startup(); // Refresh and handle empty state
     }
     
     function createNewTrip() {
-        currentTrip = null;
-        routeWaypoints = [];
-        document.getElementById('trip-display').textContent = 'New Trip';
-        document.getElementById('menu-delete-btn').style.display = 'none';
+        // Instead of starting an unsaved "New Trip", force the user to provide a name
+        document.getElementById('startup-overlay').style.display = 'flex';
+        document.getElementById('first-trip-name').value = '';
+        document.getElementById('add-waypoint-controls').style.display = 'none';
         document.getElementById('trip-controls').classList.remove('show');
-        fetchBanner('travel');
-        renderUI();
-        updateMap();
     }
     
     function saveNewTrip() {
@@ -2003,6 +2056,13 @@ if (!isset($_SESSION['user_id'])) {
     async function startup() {
         const lastActive = await loadTrips();
         
+        if (savedTrips.length === 0) {
+            // Force user to create a trip first
+            document.getElementById('startup-overlay').style.display = 'flex';
+            document.getElementById('add-waypoint-controls').style.display = 'none';
+            return;
+        }
+
         // Load the trip: either last active, or the most recent one
         let tripToLoad = lastActive;
         if (!tripToLoad && savedTrips.length > 0) {
@@ -2039,9 +2099,34 @@ if (!isset($_SESSION['user_id'])) {
             renderUI();
             updateMap();
         } else {
-            // New trip if none exist
+            // This case shouldn't be reached now due to the check above
             createNewTrip();
         }
+    }
+
+    async function createFirstTrip() {
+        const tripName = document.getElementById('first-trip-name').value.trim();
+        if (!tripName) {
+            alert('Please enter a trip name');
+            return;
+        }
+        
+        currentTrip = tripName;
+        routeWaypoints = [];
+        document.getElementById('trip-display').textContent = tripName;
+        document.getElementById('menu-delete-btn').style.display = 'block';
+        
+        // Hide overlay
+        document.getElementById('startup-overlay').style.display = 'none';
+        document.getElementById('add-waypoint-controls').style.display = 'block';
+        
+        fetchBanner(tripName);
+        renderUI();
+        updateMap();
+        
+        // Save immediately to database
+        await saveTrip();
+        await loadTrips();
     }
 
     function toggleFullscreenMap() {
