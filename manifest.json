@@ -1,0 +1,16 @@
+{
+    "name": "Plan&Go",
+    "short_name": "Plan&Go",
+    "description": "Trip Planner with OSM",
+    "start_url": "/planner/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#2c3e50",
+    "icons": [
+        {
+            "src": "logo_PWA.png",
+            "sizes": "405x405",
+            "type": "image/png"
+        }
+    ]
+}

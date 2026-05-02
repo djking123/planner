@@ -1,0 +1,17 @@
+# Database
+trips.db
+
+# GPX Uploads
+gpx/*.gpx
+gpx/
+
+# Weather Cache
+weatherAPI/cache/
+weatherAPI/cache/*.json
+
+# Logs
+logger/*.log
+logger/weather.log
+
+# Environment
+.env
