@@ -1,7 +1,7 @@
 # 🌍 Plan&Go - Your Ultimate Trip Planner
 
 <p align="center">
-  <img src="logo.png" alt="Plan&Go Logo" width="200" style="background-color: rgba(15, 23, 42, 0.5); padding: 20px; border-radius: 16px;">
+  <img src="logo_PWA.png" alt="Plan&Go Logo" width="200" style="background-color: rgba(15, 23, 42, 0.5); padding: 20px; border-radius: 16px;">
 </p>
 
 **Plan&Go** is a modern, lightweight, and powerful trip planning application designed for travelers, hikers, and explorers. Built with PHP and SQLite, it offers a seamless experience for organizing your next adventure, from weekend getaways to long-distance expeditions.
