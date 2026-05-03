@@ -112,6 +112,19 @@ initDB();
 // Authentication check
 $action = $_GET['action'] ?? '';
 
+if (isset($_SESSION['user_id'])) {
+    $db = new SQLite3($dbFile);
+    $stmt = $db->prepare('SELECT id FROM users WHERE id = :id');
+    $stmt->bindValue(':id', $_SESSION['user_id'], SQLITE3_INTEGER);
+    $userRow = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    $db->close();
+    
+    if (!$userRow) {
+        session_destroy();
+        unset($_SESSION['user_id']);
+    }
+}
+
 if (!isset($_SESSION['user_id']) && $action !== 'login' && $action !== 'check_auth' && $action !== 'setup_admin' && $action !== 'get_user_count') {
     echo json_encode(['error' => 'Unauthorized', 'auth_required' => true]);
     exit;

@@ -1,6 +1,15 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_id'])) {
+if (isset($_SESSION['user_id'])) {
+    $db_check = new SQLite3('trips.db');
+    $res = $db_check->querySingle("SELECT id FROM users WHERE id = " . (int)$_SESSION['user_id']);
+    $db_check->close();
+    if (!$res) {
+        session_destroy();
+        header('Location: login.php');
+        exit;
+    }
+} else {
     header('Location: login.php');
     exit;
 }
