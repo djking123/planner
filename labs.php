@@ -245,7 +245,7 @@ unset($trip);
             <i class="fas fa-flask"></i>
             <div>
                 <h1>Labs / DevTools</h1>
-                <p>Global Analytics & Database Explorer V1</p>
+                <p>Global Analytics & Database Explorer V 1.2</p>
             </div>
         </div>
 
