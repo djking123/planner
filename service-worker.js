@@ -1,8 +1,5 @@
 const CACHE_NAME = 'plan-go-v1';
 const ASSETS_TO_CACHE = [
-    '/planner/',
-    '/planner/index.php',
-    '/planner/api.php',
     '/planner/logo.png',
     '/planner/logo_PWA.png',
     '/planner/favicon.ico',

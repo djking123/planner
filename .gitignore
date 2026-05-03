@@ -1,5 +1,5 @@
 # Database
-trips.db
+*.db
 
 # GPX Uploads
 gpx/*.gpx
@@ -10,6 +10,7 @@ weatherAPI/cache/
 weatherAPI/cache/*.json
 
 # Logs
+*.log
 logger/*.log
 logger/weather.log
 
