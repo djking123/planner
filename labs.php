@@ -245,7 +245,7 @@ unset($trip);
             <i class="fas fa-flask"></i>
             <div>
                 <h1>Labs / DevTools</h1>
-                <p>Global Analytics & Database Explorer</p>
+                <p>Global Analytics & Database Explorer V1</p>
             </div>
         </div>
 
@@ -435,6 +435,21 @@ unset($trip);
                 <i class="fas fa-trash-alt"></i> Cleanup Unused GPX Files
             </button>
             <div id="cleanup-feedback" style="margin-top: 15px; font-size: 0.9em; font-weight: 600; display: none; padding: 12px; border-radius: 8px; animation: slideIn 0.3s ease;"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fab fa-github" style="margin-right: 10px; opacity: 0.5;"></i> Software Update</h2>
+                <span class="badge">Version Control</span>
+            </div>
+            <p style="font-size: 0.9em; color: #64748b; margin-bottom: 20px;">
+                Pull the latest version of Plan&Go from GitHub. This will update the application code to the most recent release.
+            </p>
+            <button onclick="pullUpdate(event)" style="background: #24292e; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                <i class="fab fa-github"></i> Pull Latest from GitHub
+            </button>
+            <div id="update-feedback" style="margin-top: 15px; font-size: 0.9em; font-weight: 600; display: none; padding: 12px; border-radius: 8px; animation: slideIn 0.3s ease;"></div>
+            <pre id="update-output" style="display: none; margin-top: 15px; max-height: 200px; overflow-y: auto;"></pre>
         </div>
 
         <?php foreach ($tables as $table): ?>
@@ -737,6 +752,57 @@ unset($trip);
                 feedback.style.border = '1px solid #fee2e2';
             }
             setTimeout(() => { feedback.style.display = 'none'; }, 3000);
+        }
+
+        async function pullUpdate(event) {
+            const btn = event.currentTarget;
+            const feedback = document.getElementById('update-feedback');
+            const output = document.getElementById('update-output');
+            
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pulling update...';
+            
+            try {
+                const res = await fetch('api.php?action=pull_update');
+                const data = await res.json();
+                
+                feedback.style.display = 'block';
+                if (data.success) {
+                    feedback.style.background = '#f0fdf4';
+                    feedback.style.color = '#166534';
+                    feedback.style.border = '1px solid #bbf7d0';
+                    feedback.innerHTML = `<i class="fas fa-check-circle" style="margin-right: 8px;"></i> Successfully pulled latest changes!`;
+                    
+                    if (data.output) {
+                        output.style.display = 'block';
+                        output.textContent = data.output;
+                    }
+                    
+                    // Reload after a short delay to apply changes
+                    setTimeout(() => { window.location.reload(); }, 3000);
+                } else {
+                    feedback.style.background = '#fef2f2';
+                    feedback.style.color = '#991b1b';
+                    feedback.style.border = '1px solid #fee2e2';
+                    feedback.innerHTML = `<i class="fas fa-times-circle" style="margin-right: 8px;"></i> Error: ${data.error || 'Unknown error'}`;
+                    
+                    if (data.output) {
+                        output.style.display = 'block';
+                        output.textContent = data.output;
+                    }
+                }
+            } catch (err) {
+                feedback.style.display = 'block';
+                feedback.style.background = '#fef2f2';
+                feedback.style.color = '#991b1b';
+                feedback.style.border = '1px solid #fee2e2';
+                feedback.innerHTML = `<i class="fas fa-times-circle" style="margin-right: 8px;"></i> Connection Error: ${err.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.innerHTML = '<i class="fab fa-github"></i> Pull Latest from GitHub';
+            }
         }
 
         loadUsers();

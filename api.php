@@ -508,6 +508,29 @@ else if ($action === 'set_active_trip') {
     exit;
 }
 
+else if ($action === 'pull_update') {
+    $output = [];
+    $return_var = 0;
+    
+    // Set HOME environment variable to prevent "fatal: $HOME not set" error
+    putenv('HOME=/tmp');
+
+    // The repo is public, so we don't need a PAT.
+    $repoUrl = "https://github.com/djking123/planner.git";
+    
+    $currentDir = getcwd();
+    // We still use -c safe.directory to bypass ownership checks
+    $cmd = "git -c safe.directory={$currentDir} pull {$repoUrl} main 2>&1";
+    exec($cmd, $output, $return_var);
+    
+    if ($return_var === 0) {
+        echo json_encode(['success' => true, 'output' => implode("\n", $output)]);
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Git operation failed', 'output' => implode("\n", $output)]);
+    }
+    exit;
+}
+
 else {
     echo json_encode(['error' => 'Invalid action']);
 }
