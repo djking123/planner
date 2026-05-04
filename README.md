@@ -18,6 +18,27 @@
 - **🖼️ Beautiful Banners**: Automatic Unsplash integration that fetches stunning images based on your trip title.
 - **📱 PWA Ready**: Install Plan&Go on your mobile device or desktop for a native app-like experience.
 - **🔒 Secure Access**: Built-in authentication system with administrative user management.
+- **📊 Detailed Audits**: Verify hotel stays and trip consistency with built-in auditing tools.
+
+---
+
+## 📸 Visual Overview
+
+### 🔐 Secure Authentication
+![Login Screen](screenshots/login_screen.png)
+*A modern and sleek login interface ensuring your travel plans remain private and secure.*
+
+### 🗺️ Comprehensive Route Planning
+![Route Overview](screenshots/Route_overview.png)
+*Visualize your entire journey with an interactive map, detailed itinerary, and dynamic distance calculations.*
+
+### 🥾 Advanced GPX Tracking
+![GPX Visualization](screenshots/Walking_rout_gpx.png)
+*Detailed trail visualization with terrain data and waypoint markers, perfect for hikers and outdoor enthusiasts.*
+
+### 📱 Mobile-Optimized Experience
+![Mobile View](screenshots/Mobile.png)
+*Access and manage your trips on the go with a fully responsive and touch-friendly interface.*
 
 ---
 
