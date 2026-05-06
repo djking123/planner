@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'session_config.php';
 if (isset($_SESSION['user_id'])) {
     $db_check = new SQLite3('trips.db');
     $res = $db_check->querySingle("SELECT id FROM users WHERE id = " . (int)$_SESSION['user_id']);

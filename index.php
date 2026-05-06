@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'session_config.php';
 if (isset($_SESSION['user_id'])) {
     $db_check = new SQLite3('trips.db');
     $res = $db_check->querySingle("SELECT id FROM users WHERE id = " . (int)$_SESSION['user_id']);
@@ -41,7 +41,7 @@ if (isset($_SESSION['user_id'])) {
             --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
         }
         * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
         body { display: flex; height: 100vh; font-family: 'Outfit', 'Inter', -apple-system, sans-serif; background: var(--bg-app); color: #0f172a; }
         
         /* Responsive Sidebar */
@@ -319,7 +319,7 @@ if (isset($_SESSION['user_id'])) {
         @keyframes markerPulse { 0%, 100% { transform: scale(1.4); } 50% { transform: scale(1.6); } }
         
         @media (max-width: 768px) {
-            body { flex-direction: column; overflow-x: hidden; }
+            body { flex-direction: column; overflow: hidden; }
             #sidebar { width: 100% !important; height: 65vh; max-width: 100vw; order: 3; }
             #map { width: 100% !important; height: 35vh; max-width: 100vw; order: 1; flex-grow: 1; z-index: 1; }
             .resize-divider { 
