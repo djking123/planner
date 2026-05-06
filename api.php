@@ -521,6 +521,158 @@ else if ($action === 'set_active_trip') {
     exit;
 }
 
+else if ($action === 'get_trip_details') {
+    $tripName = $_GET['trip'] ?? '';
+    if (!$tripName) {
+        echo json_encode(['error' => 'No trip name provided']);
+        exit;
+    }
+    
+    $db = new SQLite3($dbFile);
+    $stmt = $db->prepare('SELECT id, name, created_at, last_saved_at, banner_url FROM trips WHERE name = :name');
+    $stmt->bindValue(':name', $tripName, SQLITE3_TEXT);
+    $trip = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    
+    if (!$trip) {
+        $db->close();
+        echo json_encode(['error' => 'Trip not found']);
+        exit;
+    }
+    
+    $tripId = $trip['id'];
+    
+    // Get category counts
+    $stmt = $db->prepare('SELECT type, COUNT(*) as count FROM waypoints WHERE trip_id = :trip_id GROUP BY type');
+    $stmt->bindValue(':trip_id', $tripId, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $counts = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $counts[$row['type']] = $row['count'];
+    }
+    
+    // Get all waypoints
+    $stmt = $db->prepare('SELECT * FROM waypoints WHERE trip_id = :trip_id ORDER BY `order`');
+    $stmt->bindValue(':trip_id', $tripId, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $waypoints = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $waypoints[] = $row;
+    }
+    
+    $db->close();
+    echo json_encode([
+        'success' => true,
+        'trip' => $trip,
+        'counts' => $counts,
+        'waypoints' => $waypoints
+    ]);
+    exit;
+}
+
+else if ($action === 'ask_ai') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $tripData = $input['trip_data'] ?? null;
+    
+    if (!$tripData) {
+        echo json_encode(['error' => 'No trip data provided']);
+        exit;
+    }
+    
+    $apiKey = getenv('GEMINI_API_KEY');
+    if (!$apiKey) {
+        echo json_encode(['error' => 'AI API Key not configured']);
+        exit;
+    }
+    
+    $prompt = "I am planning a trip called '" . $tripData['trip']['name'] . "'. Here are the waypoints I have planned:\n\n";
+    foreach ($tripData['waypoints'] as $wp) {
+        $prompt .= "- [" . $wp['type'] . "] " . $wp['location_name'] . " (" . $wp['location_fullname'] . ") on " . ($wp['date'] ?: 'unscheduled') . "\n";
+        if (!empty($wp['comment'])) $prompt .= "  Note: " . $wp['comment'] . "\n";
+    }
+    $prompt .= "\nPlease review my trip and provide suggestions and improvements. Focus on efficiency, variety, and things I might have missed. Keep your response under 500 words.";
+
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" . $apiKey;
+    
+    $data = [
+        "contents" => [
+            [
+                "parts" => [
+                    ["text" => $prompt]
+                ]
+            ]
+        ],
+        "generationConfig" => [
+            "maxOutputTokens" => 1024
+        ]
+    ];
+    
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200) {
+        $result = json_decode($response, true);
+        $text = $result['candidates'][0]['content']['parts'][0]['text'] ?? 'No response from AI';
+        echo json_encode(['success' => true, 'suggestion' => $text, 'debug_prompt' => $prompt, 'debug_response' => $response]);
+    } else {
+        echo json_encode(['error' => 'AI Request failed', 'details' => $response, 'code' => $httpCode]);
+    }
+    exit;
+}
+
+else if ($action === 'get_env') {
+    $envPath = __DIR__ . '/.env';
+    if (!file_exists($envPath)) {
+        echo json_encode(['success' => true, 'env' => []]);
+        exit;
+    }
+    
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $env = [];
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        $parts = explode('=', $line, 2);
+        if (count($parts) === 2) {
+            $env[trim($parts[0])] = trim($parts[1]);
+        }
+    }
+    echo json_encode(['success' => true, 'env' => $env]);
+    exit;
+}
+
+else if ($action === 'save_env') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $newEnv = $input['env'] ?? null;
+    
+    if (!$newEnv || !is_array($newEnv)) {
+        echo json_encode(['error' => 'Invalid environment data']);
+        exit;
+    }
+    
+    $envContent = "";
+    foreach ($newEnv as $key => $value) {
+        // Sanitize key (uppercase, alphanumeric and underscores only)
+        $cleanKey = preg_replace('/[^A-Z0-9_]/', '', strtoupper($key));
+        if ($cleanKey) {
+            $envContent .= "{$cleanKey}=" . trim($value) . PHP_EOL;
+        }
+    }
+    
+    if (file_put_contents(__DIR__ . '/.env', $envContent) !== false) {
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['error' => 'Failed to write .env file. Check permissions.']);
+    }
+    exit;
+}
+
 else if ($action === 'pull_update') {
     $output = [];
     $return_var = 0;

@@ -246,6 +246,128 @@ unset($trip);
             font-weight: 600;
             z-index: 2;
         }
+
+        /* Drawer Styles */
+        #trip-drawer {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 450px;
+            height: 100vh;
+            background: white;
+            z-index: 10000;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border);
+        }
+        #trip-drawer.open { right: 0; }
+        #trip-drawer-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        #trip-drawer-overlay.show { display: block; }
+
+        .drawer-header {
+            height: 200px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            color: white;
+        }
+        .drawer-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.8));
+        }
+        .drawer-header > * { position: relative; z-index: 2; }
+        .drawer-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: 0.2s;
+        }
+        .drawer-close:hover { background: rgba(255,255,255,0.4); }
+
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+        }
+        .drawer-footer {
+            padding: 20px 30px;
+            border-top: 1px solid var(--border);
+            background: #f8fafc;
+        }
+
+        .category-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .cat-stat-card {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .cat-stat-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .ai-suggestion-box {
+            background: #f0f7ff;
+            border: 1px solid #3b82f633;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            font-size: 0.95em;
+            line-height: 1.6;
+            color: #1e293b;
+            display: none;
+        }
+        .ai-suggestion-box h4 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        @media (max-width: 768px) {
+            #trip-drawer { width: 100%; right: -100%; }
+        }
     </style>
 </head>
 <body>
@@ -264,11 +386,50 @@ unset($trip);
         </h2>
         <div class="trips-grid">
             <?php foreach ($trips_overview as $trip): ?>
-                <a href="index.php" onclick="localStorage.setItem('lastTrip', '<?= htmlspecialchars($trip['name']) ?>')" class="trip-block" style="background-image: url('<?= $trip['banner_url'] ?? 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&q=80&w=800' ?>');">
+                <a href="#" onclick="openTripDrawer('<?= htmlspecialchars($trip['name']) ?>')" class="trip-block" style="background-image: url('<?= $trip['banner_url'] ?? 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&q=80&w=800' ?>');">
                     <div class="badge-count">ID: #<?= $trip['id'] ?></div>
                     <h3><?= htmlspecialchars($trip['name']) ?></h3>
                 </a>
             <?php endforeach; ?>
+        </div>
+
+        <!-- Trip Detail Drawer -->
+        <div id="trip-drawer-overlay" onclick="closeDrawer()"></div>
+        <div id="trip-drawer">
+            <div class="drawer-header" id="drawer-header">
+                <div class="drawer-close" onclick="closeDrawer()"><i class="fas fa-times"></i></div>
+                <h2 id="drawer-trip-name" style="margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.5);"></h2>
+            </div>
+            <div class="drawer-content">
+                <h3>Trip Composition</h3>
+                <div class="category-stats" id="drawer-stats">
+                    <!-- Stats populated by JS -->
+                </div>
+                
+                <div style="margin-top: 40px;">
+                    <h3 style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-magic" style="color: var(--accent);"></i> AI Planning Assistant
+                    </h3>
+                    <p style="font-size: 0.9em; color: #64748b; margin-bottom: 20px;">Get smart suggestions and improvements for this trip based on your current waypoints.</p>
+                    <button id="ai-btn" onclick="askAI()" style="background: linear-gradient(135deg, #6366f1, #3b82f6); color: white; border: none; padding: 14px 24px; border-radius: 12px; cursor: pointer; font-weight: 700; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: 0.2s;">
+                        <i class="fas fa-sparkles"></i> Analyze Trip with Gemini
+                    </button>
+                    <div id="ai-suggestion" class="ai-suggestion-box"></div>
+                    
+                    <button id="debug-btn" onclick="toggleDebug()" style="display: none; background: none; border: 1px solid var(--border); color: #64748b; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.8em; margin-top: 10px; width: 100%;">
+                        <i class="fas fa-bug"></i> Show Debug Info
+                    </button>
+                    <div id="debug-info" style="display: none; margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 15px;">
+                        <h5 style="margin: 0 0 5px 0; color: #64748b; font-size: 0.85em; text-transform: uppercase;">Raw Prompt</h5>
+                        <pre id="debug-prompt" style="font-size: 0.75em; background: #f8fafc; color: #475569; padding: 10px; border-radius: 8px; white-space: pre-wrap; margin-bottom: 15px; border: 1px solid var(--border);"></pre>
+                        <h5 style="margin: 0 0 5px 0; color: #64748b; font-size: 0.85em; text-transform: uppercase;">Raw JSON Response</h5>
+                        <pre id="debug-response" style="font-size: 0.75em; background: #f8fafc; color: #475569; padding: 10px; border-radius: 8px; white-space: pre-wrap; border: 1px solid var(--border);"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="drawer-footer" style="padding: 10px; text-align: center; font-size: 0.8em; color: #94a3b8; background: #fff;">
+                Trip Detail View &bull; Powered by Gemini
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -444,6 +605,28 @@ unset($trip);
                 <i class="fas fa-trash-alt"></i> Cleanup Unused GPX Files
             </button>
             <div id="cleanup-feedback" style="margin-top: 15px; font-size: 0.9em; font-weight: 600; display: none; padding: 12px; border-radius: 8px; animation: slideIn 0.3s ease;"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-cog" style="margin-right: 10px; opacity: 0.5;"></i> System Settings (.env)</h2>
+                <span class="badge">Configuration</span>
+            </div>
+            <p style="font-size: 0.9em; color: #64748b; margin-bottom: 20px;">
+                Manage your server-side environment variables. These keys are used for API authentications and system behavior.
+            </p>
+            <div id="env-settings-container" style="display: grid; gap: 15px;">
+                <!-- Env variables will be loaded here -->
+            </div>
+            <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <button onclick="saveEnv()" style="background: #22c55e; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; flex: 1; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <i class="fas fa-save"></i> Save Settings
+                </button>
+                <button onclick="addEnvField()" style="background: #94a3b8; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <i class="fas fa-plus"></i> Add Key
+                </button>
+            </div>
+            <div id="env-feedback" style="margin-top: 15px; font-size: 0.9em; font-weight: 600; display: none; padding: 12px; border-radius: 8px; animation: slideIn 0.3s ease;"></div>
         </div>
 
         <div class="card">
@@ -627,6 +810,208 @@ unset($trip);
         }
 
         loadWeatherMarkers();
+        loadUsers();
+        loadEnv();
+
+        let activeTripData = null;
+
+        async function openTripDrawer(tripName) {
+            const drawer = document.getElementById('trip-drawer');
+            const overlay = document.getElementById('trip-drawer-overlay');
+            const header = document.getElementById('drawer-header');
+            const nameEl = document.getElementById('drawer-trip-name');
+            const statsEl = document.getElementById('drawer-stats');
+            const aiSuggestion = document.getElementById('ai-suggestion');
+            const aiBtn = document.getElementById('ai-btn');
+            const debugBtn = document.getElementById('debug-btn');
+            const debugInfo = document.getElementById('debug-info');
+            
+            // Reset state
+            aiSuggestion.style.display = 'none';
+            aiSuggestion.innerHTML = '';
+            aiBtn.disabled = false;
+            aiBtn.innerHTML = '<i class="fas fa-sparkles"></i> Analyze Trip with Gemini';
+            debugBtn.style.display = 'none';
+            debugInfo.style.display = 'none';
+            debugBtn.innerHTML = '<i class="fas fa-bug"></i> Show Debug Info';
+            
+            try {
+                const res = await fetch(`api.php?action=get_trip_details&trip=${encodeURIComponent(tripName)}`);
+                const data = await res.json();
+                
+                if (data.success) {
+                    activeTripData = data;
+                    nameEl.textContent = data.trip.name;
+                    header.style.backgroundImage = `url('${data.trip.banner_url || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&q=80&w=800'}')`;
+                    
+                    const categories = [
+                        { id: 'sight', icon: 'fa-camera', color: '#2ecc71', label: 'Sights' },
+                        { id: 'hotel', icon: 'fa-bed', color: '#f1c40f', label: 'Hotels' },
+                        { id: 'hike', icon: 'fa-mountain', color: '#ea580c', label: 'Hikes' },
+                        { id: 'poi', icon: 'fa-star', color: '#9b59b6', label: 'POIs' }
+                    ];
+                    
+                    statsEl.innerHTML = categories.map(cat => `
+                        <div class="cat-stat-card">
+                            <div class="cat-stat-icon" style="background: ${cat.color}22; color: ${cat.color}">
+                                <i class="fas ${cat.icon}"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 1.1em;">${data.counts[cat.id] || 0}</div>
+                                <div style="font-size: 0.75em; color: #64748b; font-weight: 600; text-transform: uppercase;">${cat.label}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    // Trip loaded successfully
+                    overlay.classList.add('show');
+                    drawer.classList.add('open');
+                    
+                    overlay.classList.add('show');
+                    drawer.classList.add('open');
+                }
+            } catch (err) {
+                console.error('Failed to load trip details', err);
+            }
+        }
+
+        function closeDrawer() {
+            document.getElementById('trip-drawer').classList.remove('open');
+            document.getElementById('trip-drawer-overlay').classList.remove('show');
+        }
+
+        async function askAI() {
+            if (!activeTripData) return;
+            
+            const btn = document.getElementById('ai-btn');
+            const suggestionBox = document.getElementById('ai-suggestion');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gemini is thinking...';
+            
+            try {
+                const res = await fetch('api.php?action=ask_ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ trip_data: activeTripData })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    suggestionBox.style.display = 'block';
+                    document.getElementById('debug-btn').style.display = 'block';
+                    document.getElementById('debug-prompt').textContent = data.debug_prompt;
+                    
+                    try {
+                        const prettyJson = JSON.stringify(JSON.parse(data.debug_response), null, 2);
+                        document.getElementById('debug-response').textContent = prettyJson;
+                    } catch(e) {
+                        document.getElementById('debug-response').textContent = data.debug_response;
+                    }
+
+                    // Convert markdown-ish response to HTML (basic)
+                    let text = data.suggestion;
+                    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                    text = text.replace(/\n/g, '<br>');
+                    
+                    suggestionBox.innerHTML = `
+                        <h4><i class="fas fa-robot"></i> Gemini's Suggestions</h4>
+                        <div style="font-size: 0.9em; line-height: 1.5;">${text}</div>
+                    `;
+                } else {
+                    alert('AI Analysis failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Connection error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sparkles"></i> Analyze Trip with Gemini';
+            }
+        }
+
+        function toggleDebug() {
+            const info = document.getElementById('debug-info');
+            const btn = document.getElementById('debug-btn');
+            const isOpen = info.style.display === 'block';
+            
+            info.style.display = isOpen ? 'none' : 'block';
+            btn.innerHTML = isOpen ? '<i class="fas fa-bug"></i> Show Debug Info' : '<i class="fas fa-eye-slash"></i> Hide Debug Info';
+            
+            if (!isOpen) {
+                setTimeout(() => {
+                    info.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+        }
+
+        async function loadEnv() {
+            try {
+                const res = await fetch('api.php?action=get_env');
+                const data = await res.json();
+                if (data.success) {
+                    const container = document.getElementById('env-settings-container');
+                    container.innerHTML = '';
+                    for (const [key, value] of Object.entries(data.env)) {
+                        addEnvField(key, value);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load env settings', err);
+            }
+        }
+
+        function addEnvField(key = '', value = '') {
+            const container = document.getElementById('env-settings-container');
+            const div = document.createElement('div');
+            div.className = 'env-row';
+            div.style.display = 'flex';
+            div.style.gap = '10px';
+            div.style.alignItems = 'center';
+            div.innerHTML = `
+                <input type="text" placeholder="KEY" value="${key}" class="env-key" style="flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: monospace; font-weight: bold; text-transform: uppercase;">
+                <input type="text" placeholder="VALUE" value="${value}" class="env-value" style="flex: 2; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: monospace;">
+                <button onclick="this.parentElement.remove()" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 10px;"><i class="fas fa-trash-alt"></i></button>
+            `;
+            container.appendChild(div);
+        }
+
+        async function saveEnv() {
+            const container = document.getElementById('env-settings-container');
+            const rows = container.querySelectorAll('.env-row');
+            const env = {};
+            rows.forEach(row => {
+                const key = row.querySelector('.env-key').value.trim();
+                const value = row.querySelector('.env-value').value.trim();
+                if (key) env[key] = value;
+            });
+            
+            const feedback = document.getElementById('env-feedback');
+            try {
+                const res = await fetch('api.php?action=save_env', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ env })
+                });
+                const data = await res.json();
+                feedback.style.display = 'block';
+                if (data.success) {
+                    feedback.style.background = '#f0fdf4';
+                    feedback.style.color = '#166534';
+                    feedback.style.border = '1px solid #bbf7d0';
+                    feedback.innerHTML = '<i class="fas fa-check-circle"></i> Settings saved successfully!';
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                feedback.style.display = 'block';
+                feedback.style.background = '#fef2f2';
+                feedback.style.color = '#991b1b';
+                feedback.style.border = '1px solid #fee2e2';
+                feedback.innerHTML = '<i class="fas fa-times-circle"></i> Error: ' + err.message;
+            }
+            setTimeout(() => { feedback.style.display = 'none'; }, 3000);
+        }
 
         async function cleanupGPX(event) {
             const btn = event.currentTarget;
