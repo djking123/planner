@@ -8,7 +8,14 @@ header('Content-Type: application/json');
 
 // Helper to parse .env file
 function loadEnv($path) {
-    if (!file_exists($path)) return;
+    if (!file_exists($path)) {
+        $examplePath = __DIR__ . '/.env.example';
+        if (file_exists($examplePath)) {
+            copy($examplePath, $path);
+        } else {
+            return;
+        }
+    }
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         if (strpos(trim($line), '#') === 0) continue;
@@ -584,12 +591,29 @@ else if ($action === 'ask_ai') {
         exit;
     }
     
-    $prompt = "I am planning a trip called '" . $tripData['trip']['name'] . "'. Here are the waypoints I have planned:\n\n";
-    foreach ($tripData['waypoints'] as $wp) {
-        $prompt .= "- [" . $wp['type'] . "] " . $wp['location_name'] . " (" . $wp['location_fullname'] . ") on " . ($wp['date'] ?: 'unscheduled') . "\n";
-        if (!empty($wp['comment'])) $prompt .= "  Note: " . $wp['comment'] . "\n";
+    $prompt = "I am planning a trip called '" . $tripData['trip']['name'] . "'. Here is my current itinerary:\n\n";
+    
+    $planned = array_filter($tripData['waypoints'], function($wp) { return $wp['type'] !== 'poi'; });
+    $unplanned = array_filter($tripData['waypoints'], function($wp) { return $wp['type'] === 'poi'; });
+
+    if (!empty($planned)) {
+        $prompt .= "--- PLANNED WAYPOINTS ---\n";
+        foreach ($planned as $wp) {
+            $prompt .= "- [" . $wp['type'] . "] " . $wp['location_name'] . " (" . $wp['location_fullname'] . ") on " . ($wp['date'] ?: 'unscheduled') . "\n";
+            if (!empty($wp['comment'])) $prompt .= "  Note: " . $wp['comment'] . "\n";
+        }
     }
-    $prompt .= "\nPlease review my trip and provide suggestions and improvements. Focus on efficiency, variety, and things I might have missed. Keep your response under 500 words.";
+
+    if (!empty($unplanned)) {
+        $prompt .= "\n--- UNPLANNED POINTS OF INTEREST (POIs) ---\n";
+        $prompt .= "The following locations are items I want to visit but haven't scheduled into a specific day yet. Please suggest where they might fit best in the trip based on proximity and efficiency:\n";
+        foreach ($unplanned as $wp) {
+            $prompt .= "- " . $wp['location_name'] . " (" . $wp['location_fullname'] . ")\n";
+            if (!empty($wp['comment'])) $prompt .= "  Note: " . $wp['comment'] . "\n";
+        }
+    }
+
+    $prompt .= "\nBased on the above, please review my trip and provide suggestions and improvements. Focus on efficiency, variety, and specifically suggest where to integrate the unplanned POIs into the schedule. Keep your response under 500 words.";
 
     $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" . $apiKey;
     
