@@ -613,7 +613,12 @@ else if ($action === 'ask_ai') {
         }
     }
 
-    $prompt .= "\nBased on the above, please review my trip and provide suggestions and improvements. Focus on efficiency, variety, and specifically suggest where to integrate the unplanned POIs into the schedule. Keep your response under 500 words.";
+    $customText = $input['custom_text'] ?? '';
+    if (!empty(trim($customText))) {
+        $prompt .= "\n" . $customText;
+    } else {
+        $prompt .= "\nBased on the above, please review my trip and provide suggestions and improvements. Focus on efficiency, variety, and specifically suggest where to integrate the unplanned POIs into the schedule. Keep your response under 500 words.";
+    }
 
     $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" . $apiKey;
     
@@ -648,6 +653,76 @@ else if ($action === 'ask_ai') {
     } else {
         echo json_encode(['error' => 'AI Request failed', 'details' => $response, 'code' => $httpCode]);
     }
+    exit;
+}
+
+else if ($action === 'duplicate_trip') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $sourceName = $input['source_name'] ?? '';
+    $targetName = $input['target_name'] ?? '';
+    
+    if (empty($sourceName) || empty($targetName)) {
+        echo json_encode(['success' => false, 'error' => 'Source and target names are required']);
+        exit;
+    }
+    
+    $db = new SQLite3($dbFile);
+    
+    // Check if target name already exists
+    $stmt = $db->prepare('SELECT id FROM trips WHERE name = :name');
+    $stmt->bindValue(':name', $targetName, SQLITE3_TEXT);
+    $targetRow = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    if ($targetRow) {
+        $db->close();
+        echo json_encode(['success' => false, 'error' => 'A trip with this name already exists']);
+        exit;
+    }
+    
+    // Get source trip
+    $stmt = $db->prepare('SELECT id, banner_url FROM trips WHERE name = :name');
+    $stmt->bindValue(':name', $sourceName, SQLITE3_TEXT);
+    $sourceRow = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    
+    if (!$sourceRow) {
+        $db->close();
+        echo json_encode(['success' => false, 'error' => 'Source trip not found']);
+        exit;
+    }
+    
+    $sourceTripId = $sourceRow['id'];
+    $bannerUrl = $sourceRow['banner_url'];
+    
+    // Create new trip
+    $stmt = $db->prepare('INSERT INTO trips (name, banner_url, created_at, last_saved_at) VALUES (:name, :banner_url, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
+    $stmt->bindValue(':name', $targetName, SQLITE3_TEXT);
+    $stmt->bindValue(':banner_url', $bannerUrl, SQLITE3_TEXT);
+    $stmt->execute();
+    
+    $targetTripId = $db->lastInsertRowID();
+    
+    // Get waypoints from source trip
+    $stmt = $db->prepare('SELECT latitude, longitude, location_name, location_fullname, type, date, comment, gpx_path, `order` FROM waypoints WHERE trip_id = :trip_id ORDER BY `order`');
+    $stmt->bindValue(':trip_id', $sourceTripId, SQLITE3_INTEGER);
+    $result = $stmt->execute();
+    
+    // Insert waypoints into target trip
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $stmtInsert = $db->prepare('INSERT INTO waypoints (trip_id, `order`, latitude, longitude, location_name, location_fullname, type, date, comment, gpx_path) VALUES (:trip_id, :order, :lat, :lng, :name, :fullname, :type, :date, :comment, :gpx_path)');
+        $stmtInsert->bindValue(':trip_id', $targetTripId, SQLITE3_INTEGER);
+        $stmtInsert->bindValue(':order', $row['order'], SQLITE3_INTEGER);
+        $stmtInsert->bindValue(':lat', $row['latitude'], SQLITE3_FLOAT);
+        $stmtInsert->bindValue(':lng', $row['longitude'], SQLITE3_FLOAT);
+        $stmtInsert->bindValue(':name', $row['location_name'], SQLITE3_TEXT);
+        $stmtInsert->bindValue(':fullname', $row['location_fullname'], SQLITE3_TEXT);
+        $stmtInsert->bindValue(':type', $row['type'], SQLITE3_TEXT);
+        $stmtInsert->bindValue(':date', $row['date'], SQLITE3_TEXT);
+        $stmtInsert->bindValue(':comment', $row['comment'], SQLITE3_TEXT);
+        $stmtInsert->bindValue(':gpx_path', $row['gpx_path'], SQLITE3_TEXT);
+        $stmtInsert->execute();
+    }
+    
+    $db->close();
+    echo json_encode(['success' => true]);
     exit;
 }
 

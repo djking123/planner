@@ -406,11 +406,23 @@ unset($trip);
                     <!-- Stats populated by JS -->
                 </div>
                 
-                <div style="margin-top: 40px;">
+                <div style="margin-top: 20px; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px;">
+                    <button id="duplicate-btn" onclick="duplicateTrip()" style="background: var(--primary); color: white; border: none; padding: 14px 24px; border-radius: 12px; cursor: pointer; font-weight: 700; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.2s; box-shadow: var(--shadow-md);">
+                        <i class="fas fa-copy"></i> Complete reis dupliceren
+                    </button>
+                </div>
+                
+                <div style="margin-top: 20px;">
                     <h3 style="display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-magic" style="color: var(--accent);"></i> AI Planning Assistant
                     </h3>
-                    <p style="font-size: 0.9em; color: #64748b; margin-bottom: 20px;">Get smart suggestions and improvements for this trip based on your current waypoints.</p>
+                    <p style="font-size: 0.9em; color: #64748b; margin-bottom: 15px;">Get smart suggestions and improvements for this trip based on your current waypoints.</p>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="ai-custom-prompt" style="display: block; font-size: 0.8em; font-weight: 600; color: #64748b; margin-bottom: 5px;">Aangepaste AI instructie</label>
+                        <textarea id="ai-custom-prompt" style="width: 100%; box-sizing: border-box; min-height: 80px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; font-size: 0.9em; resize: vertical;" placeholder="Bijv: geef tips voor deze reis">Geef tips voor deze reis</textarea>
+                    </div>
+
                     <button id="ai-btn" onclick="askAI()" style="background: linear-gradient(135deg, #6366f1, #3b82f6); color: white; border: none; padding: 14px 24px; border-radius: 12px; cursor: pointer; font-weight: 700; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: 0.2s;">
                         <i class="fas fa-sparkles"></i> Analyze Trip with Gemini
                     </button>
@@ -885,6 +897,7 @@ unset($trip);
             
             const btn = document.getElementById('ai-btn');
             const suggestionBox = document.getElementById('ai-suggestion');
+            const customText = document.getElementById('ai-custom-prompt').value.trim();
             
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gemini is thinking...';
@@ -893,7 +906,7 @@ unset($trip);
                 const res = await fetch('api.php?action=ask_ai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ trip_data: activeTripData })
+                    body: JSON.stringify({ trip_data: activeTripData, custom_text: customText })
                 });
                 const data = await res.json();
                 
@@ -927,6 +940,41 @@ unset($trip);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sparkles"></i> Analyze Trip with Gemini';
+            }
+        }
+
+        async function duplicateTrip() {
+            if (!activeTripData) return;
+            
+            const sourceName = activeTripData.trip.name;
+            const targetName = prompt("Voer de naam in voor de gedupliceerde reis:", `Kopie van ${sourceName}`);
+            
+            if (!targetName || !targetName.trim()) return;
+            
+            const btn = document.getElementById('duplicate-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dupliceren...';
+            
+            try {
+                const res = await fetch('api.php?action=duplicate_trip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_name: sourceName, target_name: targetName.trim() })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert('Reis succesvol gedupliceerd!');
+                    closeDrawer();
+                    window.location.reload();
+                } else {
+                    alert('Dupliceren mislukt: ' + (data.error || 'Onbekende fout'));
+                }
+            } catch (err) {
+                alert('Netwerkfout tijdens het dupliceren van de reis.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-copy"></i> Complete reis dupliceren';
             }
         }
 

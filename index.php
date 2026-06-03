@@ -1053,13 +1053,8 @@ if (isset($_SESSION['user_id'])) {
         const container = document.getElementById('waypoint-list');
         let finalHtml = '';
         
-        // Handle Ghost Day Logic
-        const existingDates = new Set(routeWaypoints.filter(wp => wp.type !== 'poi').map(wp => wp.date));
-        if (pendingNewDay && !existingDates.has(pendingNewDay)) {
-            // Keep it
-        } else {
-            pendingNewDay = null;
-        }
+        // Handle Ghost Day Logic (deactivated as empty days are real now)
+        pendingNewDay = null;
         
         // Separate POIs from regular waypoints
         const poiWaypoints = [];
@@ -1094,7 +1089,8 @@ if (isset($_SESSION['user_id'])) {
                 finalHtml += `
                     <div class="wp-card" draggable="true" data-index="${index}" data-date="poi" 
                         onmouseenter="highlightWaypoint(${index})" onmouseleave="unhighlightWaypoint(${index})"
-                        onclick="if(!event.target.closest('button, input, textarea')) zoomToPOIs()"
+                        onclick="if(!event.target.closest('button, input, textarea')) zoomToWaypoint(${index})"
+                        oncontextmenu="event.preventDefault(); showMoveCalendar(event, ${index})"
                         ondragstart="wpDragStart(${index}, 'poi')" ondragover="wpDragOver(event)" 
                         ondrop="wpDrop(event, ${index}, 'poi')" ondragend="dragEnd()" ondragleave="wpDragLeave(event)">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -1130,12 +1126,12 @@ if (isset($_SESSION['user_id'])) {
         
         // Render grouped waypoints with per-day stats
         const dates = Object.keys(grouped).sort();
-
+ 
         // Reset totals and render grouped waypoints (keep current values until updated)
         let totalDistance = 0;
         let totalDuration = 0;
         let daysPending = dates.length;
-
+ 
         const updateTotals = (d, t) => {
             totalDistance += d;
             totalDuration += t;
@@ -1147,12 +1143,22 @@ if (isset($_SESSION['user_id'])) {
         };
         
         const asyncUpdateTasks = [];
-
+ 
         for (let dayNum = 0; dayNum < dates.length; dayNum++) {
             const date = dates[dayNum];
             const isCollapsed = collapsedSections.has(date);
             const dayWaypoints = grouped[date].map(x => x.index).sort((a, b) => a - b);
             
+            // Render insert-day zone before day (starting from dayNum 1)
+            if (dayNum > 0) {
+                finalHtml += `
+                    <div class="insert-day-zone" onclick="event.stopPropagation(); insertDayBetween('${dates[dayNum - 1]}', '${date}')">
+                        <div class="insert-day-line"></div>
+                        <button class="insert-day-btn" title="Aad a day"><i class="fas fa-plus-circle"></i>Add a day</button>
+                    </div>
+                `;
+            }
+
             // Render basic structure immediately
             finalHtml += `
                 <div class="day-header ${isCollapsed ? 'collapsed' : ''}" id="header-${dayNum}" onclick="zoomToDay('${date}')" style="cursor: pointer;">
@@ -1167,6 +1173,7 @@ if (isset($_SESSION['user_id'])) {
                         <div class="day-stats" id="stats-display-${dayNum}"><i class="fas fa-spinner fa-spin"></i> Loading stats</div>
                     </div>
                     <div class="day-temp" id="temp-display-${dayNum}"><span style="opacity: 0.5;"></span></div>
+                    <div class="delete-day-btn" onclick="event.stopPropagation(); deleteDay('${date}')" title="Remove day" style="color: #ef4444; opacity: 0.6; padding: 4px 8px; margin-right: 5px;"><i class="fas fa-trash-alt"></i></div>
                     <div class="collapse-btn" onclick="event.stopPropagation(); toggleSection('${date}', ${dayNum})"><i class="fas fa-chevron-down"></i></div>
                 </div>
                 <div class="day-drop-zone" ondragover="dayDragOver(event, '${date}')" ondrop="dayDrop(event, '${date}')" ondragleave="dayDragLeave(event)"></div>
@@ -1174,8 +1181,10 @@ if (isset($_SESSION['user_id'])) {
             
             // Save task for later execution
             asyncUpdateTasks.push({ dayNum, dayWaypoints, date });
-
+ 
             grouped[date].forEach(({ wp, index }) => {
+                if (wp.type === 'empty_day') return; // Skip rendering card for empty day
+
                 const iconMap = {
                     hotel: '<i class="fas fa-bed" style="color: #f1c40f;"></i>',
                     sight: '<i class="fas fa-camera" style="color: #2ecc71;"></i>',
@@ -1186,7 +1195,8 @@ if (isset($_SESSION['user_id'])) {
                 finalHtml += `
                     <div class="wp-card" draggable="true" data-index="${index}" data-date="${date}" 
                         onmouseenter="highlightWaypoint(${index})" onmouseleave="unhighlightWaypoint(${index})"
-                        onclick="if(!event.target.closest('button, input, textarea')) zoomToDay('${date}')"
+                        onclick="if(!event.target.closest('button, input, textarea')) zoomToWaypoint(${index})"
+                        oncontextmenu="event.preventDefault(); showMoveCalendar(event, ${index})"
                         ondragstart="wpDragStart(${index}, '${date}')" ondragover="wpDragOver(event)" 
                         ondrop="wpDrop(event, ${index}, '${date}')" ondragend="dragEnd()" ondragleave="wpDragLeave(event)">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -1212,39 +1222,21 @@ if (isset($_SESSION['user_id'])) {
             });
             finalHtml += `</div>`;
         }
-
-        // Render Ghost Day
-        if (pendingNewDay) {
-            const dayNum = dates.length;
-            finalHtml += `
-                <div class="day-header" 
-                    style="opacity: 0.6; border: 2px dashed rgba(255,255,255,0.3); background: rgba(30, 41, 59, 0.7); cursor: copy;"
-                    ondragover="dayDragOver(event, '${pendingNewDay}')" 
-                    ondrop="dayDrop(event, '${pendingNewDay}')" 
-                    ondragleave="dayDragLeave(event)">
-                    <div class="day-header-info">
-                        <div>Day ${dayNum + 1}: ${new Date(pendingNewDay).toLocaleDateString()} (Planned)</div>
-                        <div class="day-stats">Drop items here to start this day</div>
-                    </div>
-                </div>
-                <div class="day-drop-zone" ondragover="dayDragOver(event, '${pendingNewDay}')" ondrop="dayDrop(event, '${pendingNewDay}')" ondragleave="dayDragLeave(event)"></div>
-            `;
-        }
-
-        // Add Button
+ 
+        // Add Button and Autofill button at bottom
         finalHtml += `
-            <div class="add-day-container" 
-                ondragover="${pendingNewDay ? `dayDragOver(event, '${pendingNewDay}')` : ''}" 
-                ondrop="${pendingNewDay ? `dayDrop(event, '${pendingNewDay}')` : ''}"
-                ondragleave="dayDragLeave(event)">
-                <button class="btn-add-day" onclick="event.stopPropagation(); addNewDay()">
-                    <i class="fas fa-plus-circle"></i> Add Trip Day
+            <div class="add-day-container" style="display: flex; gap: 10px; width: 100%; box-sizing: border-box; padding: 20px;">
+                <button class="btn-add-day" onclick="event.stopPropagation(); addNewDay()" style="flex: 1; justify-content: center;">
+                    <i class="fas fa-plus-circle"></i> Add a day
+                </button>
+                <button class="btn-add-day" onclick="event.stopPropagation(); autofillIntermediateDays()" style="flex: 1; justify-content: center; border-color: var(--accent); color: var(--accent); background: rgba(59, 130, 246, 0.05);">
+                    <i class="fas fa-magic"></i> Fill the gaps
                 </button>
             </div>
         `;
         
         container.innerHTML = finalHtml;
-
+ 
         // Run async tasks after setting innerHTML
         asyncUpdateTasks.forEach(({ dayNum, dayWaypoints, date }) => {
             calculateDayStats(dayNum, dayWaypoints).then(dayStats => {
@@ -1252,18 +1244,23 @@ if (isset($_SESSION['user_id'])) {
                 if (statsElement) statsElement.innerHTML = dayStats.html;
                 updateTotals(dayStats.distance, dayStats.duration);
             });
-
+ 
             const lastWaypointIdx = dayWaypoints[dayWaypoints.length - 1];
             const lastWaypoint = routeWaypoints[lastWaypointIdx];
-            fetchWeatherData(lastWaypoint.lat, lastWaypoint.lng, date).then(weatherData => {
-                if (weatherData) {
-                    const tempElement = document.getElementById('temp-display-' + dayNum);
-                    if (tempElement) {
-                        const unit = weatherData.unit || '°C';
-                        tempElement.innerHTML = `<span title="Type: ${weatherData.type}" style="cursor: help;">${weatherData.temperature}${unit}</span>`;
+            if (lastWaypoint && lastWaypoint.type !== 'empty_day') {
+                fetchWeatherData(lastWaypoint.lat, lastWaypoint.lng, date).then(weatherData => {
+                    if (weatherData) {
+                        const tempElement = document.getElementById('temp-display-' + dayNum);
+                        if (tempElement) {
+                            const unit = weatherData.unit || '°C';
+                            tempElement.innerHTML = `<span title="Type: ${weatherData.type}" style="cursor: help;">${weatherData.temperature}${unit}</span>`;
+                        }
                     }
-                }
-            });
+                });
+            } else {
+                const tempElement = document.getElementById('temp-display-' + dayNum);
+                if (tempElement) tempElement.innerHTML = '';
+            }
         });
         
         // Handle case with no days
@@ -1394,18 +1391,22 @@ if (isset($_SESSION['user_id'])) {
     async function calculateDayStats(dayNum, waypoints) {
         if (waypoints.length === 0) return { html: '', distance: 0, duration: 0 };
         
-        // Build list of dates for proper grouping (excluding POIs)
+        // Build list of dates for proper grouping (excluding POIs and empty_days)
         const dateMap = {};
         routeWaypoints.forEach((wp, i) => {
-            if (wp.type !== 'poi') {
+            if (wp.type !== 'poi' && wp.type !== 'empty_day') {
                 if (!dateMap[wp.date]) dateMap[wp.date] = [];
                 dateMap[wp.date].push(i);
             }
         });
         const sortedDates = Object.keys(dateMap).sort();
         
-        // Get waypoints for this day (excluding POIs)
-        let dayWaypoints = waypoints.map(idx => routeWaypoints[idx]).filter(wp => wp.type !== 'poi');
+        // Get waypoints for this day (excluding POIs and empty_day)
+        let dayWaypoints = waypoints.map(idx => routeWaypoints[idx]).filter(wp => wp.type !== 'poi' && wp.type !== 'empty_day');
+        
+        if (dayWaypoints.length === 0) {
+            return { html: 'Emty day ', distance: 0, duration: 0 };
+        }
         
         // If not first day, add starting point from previous day's last waypoint
         if (dayNum > 0 && sortedDates[dayNum - 1]) {
@@ -1420,7 +1421,7 @@ if (isset($_SESSION['user_id'])) {
         const distance = routeData.distance;
         const travelTime = routeData.duration;
         
-        const stops = waypoints.length === 1 ? '1 stop' : `${waypoints.length} stops`;
+        const stops = dayWaypoints.length === 1 ? '1 stop' : `${dayWaypoints.length} stops`;
         const travelText = travelTime > 0 ? ` • Travel: ${formatTime(Math.round(travelTime))}` : '';
         const html = `${distance.toFixed(1)} km • ${stops}${travelText}`;
         
@@ -1439,12 +1440,28 @@ if (isset($_SESSION['user_id'])) {
                 return new Date(a.wp.date) - new Date(b.wp.date);
             });
         
-        const newWaypoints = new Array(routeWaypoints.length);
-        sorted.forEach((item, newIdx) => {
-            newWaypoints[newIdx] = item.wp;
+        const cleaned = [];
+        const datesWithRealWps = new Set();
+        sorted.forEach(item => {
+            if (item.wp.type !== 'poi' && item.wp.type !== 'empty_day') {
+                datesWithRealWps.add(item.wp.date);
+            }
         });
         
-        routeWaypoints = newWaypoints;
+        sorted.forEach(item => {
+            if (item.wp.type === 'empty_day') {
+                // Keep empty_day waypoint only if there are no real waypoints on that date
+                if (!datesWithRealWps.has(item.wp.date)) {
+                    cleaned.push(item.wp);
+                    // Add to datesWithRealWps to avoid duplicates for the same date
+                    datesWithRealWps.add(item.wp.date);
+                }
+            } else {
+                cleaned.push(item.wp);
+            }
+        });
+        
+        routeWaypoints = cleaned;
     }
     
     function wpDragStart(index, date) {
@@ -1711,6 +1728,8 @@ if (isset($_SESSION['user_id'])) {
 
         // Add new markers with numbers based on array order
         routeWaypoints.forEach((wp, i) => {
+            if (wp.type === 'empty_day') return; // Skip drawing markers for empty days
+
             const commentHtml = wp.comment ? `<div class="wp-comment" style="margin-top: 8px; border-left-color: var(--accent); max-height: 80px; overflow-y: auto;">${formatComment(wp.comment)}</div>` : '';
             
             // If it's a hike with GPX data, draw the track
@@ -1743,7 +1762,11 @@ if (isset($_SESSION['user_id'])) {
                     ${commentHtml}
                 </div>
             `, { maxWidth: 180, className: 'custom-popup' });
-            marker.on('click', () => zoomToWaypoint(i));
+            
+            // Clicking marker on map ONLY opens popup, does not zoom!
+            marker.on('click', () => {
+                marker.openPopup();
+            });
             
             // Highlight sidebar when hovering map marker
             marker.on('mouseover', () => {
@@ -1772,14 +1795,15 @@ if (isset($_SESSION['user_id'])) {
             markerLayers[i] = marker;
         });
 
-        // Update route with waypoints in correct order (excluding POIs)
-        const routePoints = routeWaypoints.filter(wp => wp.type !== 'poi');
+        // Update route with waypoints in correct order (excluding POIs and empty days)
+        const routePoints = routeWaypoints.filter(wp => wp.type !== 'poi' && wp.type !== 'empty_day');
         const pts = routePoints.map(wp => L.latLng(wp.lat, wp.lng));
         routingControl.setWaypoints(pts);
         
-        // Fit map to show all waypoints (including POIs)
-        if (routeWaypoints.length > 0) {
-            const allPts = routeWaypoints.map(wp => L.latLng(wp.lat, wp.lng));
+        // Fit map to show all waypoints (excluding empty days, including POIs)
+        const validWaypoints = routeWaypoints.filter(wp => wp.type !== 'empty_day');
+        if (validWaypoints.length > 0) {
+            const allPts = validWaypoints.map(wp => L.latLng(wp.lat, wp.lng));
             const bounds = L.latLngBounds(allPts);
             map.fitBounds(bounds, { padding: [50, 50] });
         }
@@ -1885,11 +1909,20 @@ if (isset($_SESSION['user_id'])) {
             nextDate = new Date().toISOString().split('T')[0];
         }
         
-        pendingNewDay = nextDate;
-        const picker = document.getElementById('search-date');
-        if (picker) picker.value = nextDate;
+        routeWaypoints.push({
+            name: 'Emty day',
+            fullname: 'Emty day',
+            lat: 0,
+            lng: 0,
+            type: 'empty_day',
+            date: nextDate,
+            comment: ''
+        });
         
+        renumberWaypoints();
         renderUI();
+        updateMap();
+        autoSaveTrip();
         
         // Scroll to the new day
         setTimeout(() => {
@@ -2291,6 +2324,200 @@ if (isset($_SESSION['user_id'])) {
         }
     }
 
+    // Helper functions for Day insertion, deletion, and relocation
+    window.deleteDay = function(date) {
+        if (!confirm(`Weet u zeker dat u deze dag (${new Date(date).toLocaleDateString()}) wilt verwijderen? Alle activiteiten op deze dag worden verwijderd.`)) return;
+        routeWaypoints = routeWaypoints.filter(wp => wp.date !== date);
+        renumberWaypoints();
+        renderUI();
+        updateMap();
+        autoSaveTrip();
+    };
+
+    window.insertDayBetween = function(prevDateStr, nextDateStr) {
+        const prevDate = new Date(prevDateStr);
+        const nextDate = new Date(nextDateStr);
+        const diffTime = Math.abs(nextDate - prevDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        let insertDateStr;
+        if (diffDays > 1) {
+            // Fill the gap
+            const insertDate = new Date(prevDate);
+            insertDate.setDate(insertDate.getDate() + 1);
+            insertDateStr = insertDate.toISOString().split('T')[0];
+        } else {
+            // Consecutive days - shift next day and all subsequent days by 1
+            routeWaypoints.forEach(wp => {
+                if (wp.type !== 'poi' && wp.date >= nextDateStr) {
+                    const d = new Date(wp.date);
+                    d.setDate(d.getDate() + 1);
+                    wp.date = d.toISOString().split('T')[0];
+                }
+            });
+            insertDateStr = nextDateStr;
+        }
+        
+        // Add an empty day at insertDateStr
+        routeWaypoints.push({
+            name: 'Emty day',
+            fullname: 'Emty day',
+            lat: 0,
+            lng: 0,
+            type: 'empty_day',
+            date: insertDateStr,
+            comment: ''
+        });
+        
+        renumberWaypoints();
+        renderUI();
+        updateMap();
+        autoSaveTrip();
+    };
+
+    window.autofillIntermediateDays = function() {
+        const dates = [...new Set(routeWaypoints.filter(wp => wp.type !== 'poi').map(wp => wp.date))].sort();
+        if (dates.length < 2) {
+            alert('Er zijn minstens 2 dagen nodig om tussenliggende dagen op te vullen.');
+            return;
+        }
+        
+        const firstDate = new Date(dates[0]);
+        const lastDate = new Date(dates[dates.length - 1]);
+        let current = new Date(firstDate);
+        let addedCount = 0;
+        
+        while (current < lastDate) {
+            current.setDate(current.getDate() + 1);
+            const currentStr = current.toISOString().split('T')[0];
+            if (current < lastDate && !dates.includes(currentStr)) {
+                routeWaypoints.push({
+                    name: 'Emty day',
+                    fullname: 'Emty day',
+                    lat: 0,
+                    lng: 0,
+                    type: 'empty_day',
+                    date: currentStr,
+                    comment: ''
+                });
+                addedCount++;
+            }
+        }
+        
+        if (addedCount > 0) {
+            renumberWaypoints();
+            renderUI();
+            updateMap();
+            autoSaveTrip();
+            alert(`${addedCount} tussenliggende dag(en) toegevoegd.`);
+        } else {
+            alert('Er zijn geen ontbrekende tussenliggende dagen om op te vullen.');
+        }
+    };
+
+    let calendarCurrentDate = new Date();
+    let moveWaypointIndex = null;
+
+    window.showMoveCalendar = function(e, index) {
+        moveWaypointIndex = index;
+        const wp = routeWaypoints[index];
+        document.getElementById('move-wp-name').innerText = `Verplaats "${wp.name}" naar een dag:`;
+        
+        if (wp.date && wp.type !== 'poi') {
+            calendarCurrentDate = new Date(wp.date);
+        } else {
+            const dates = [...new Set(routeWaypoints.filter(x => x.type !== 'poi').map(x => x.date))].sort();
+            if (dates.length > 0) {
+                calendarCurrentDate = new Date(dates[0]);
+            } else {
+                calendarCurrentDate = new Date();
+            }
+        }
+        
+        renderCalendar();
+        document.getElementById('calendar-modal').classList.add('show');
+    };
+
+    window.closeCalendarModal = function() {
+        document.getElementById('calendar-modal').classList.remove('show');
+    };
+
+    window.changeCalendarMonth = function(offset) {
+        calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + offset);
+        renderCalendar();
+    };
+
+    window.renderCalendar = function() {
+        const year = calendarCurrentDate.getFullYear();
+        const month = calendarCurrentDate.getMonth();
+        
+        const monthNames = [
+            "Januari", "Februari", "Maart", "April", "Mei", "Juni", 
+            "Juli", "Augustus", "September", "Oktober", "November", "December"
+        ];
+        
+        document.getElementById('calendar-month-year').innerText = `${monthNames[month]} ${year}`;
+        
+        const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
+        const totalDays = new Date(year, month + 1, 0).getDate();
+        const prevTotalDays = new Date(year, month, 0).getDate();
+        
+        const daysContainer = document.getElementById('calendar-days');
+        daysContainer.innerHTML = '';
+        
+        const tripDates = [...new Set(routeWaypoints.filter(wp => wp.type !== 'poi').map(wp => wp.date))].sort();
+        const wp = routeWaypoints[moveWaypointIndex];
+        
+        for (let i = firstDayIndex - 1; i >= 0; i--) {
+            const dayNum = prevTotalDays - i;
+            const div = document.createElement('div');
+            div.className = 'calendar-day';
+            div.innerText = dayNum;
+            daysContainer.appendChild(div);
+        }
+        
+        for (let i = 1; i <= totalDays; i++) {
+            const div = document.createElement('div');
+            div.className = 'calendar-day current-month';
+            div.innerText = i;
+            
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            
+            if (tripDates.includes(dateStr)) {
+                div.classList.add('trip-day');
+                if (wp && wp.date === dateStr) {
+                    div.classList.add('active-wp-day');
+                }
+                div.onclick = () => {
+                    moveWaypointToDate(moveWaypointIndex, dateStr);
+                    closeCalendarModal();
+                };
+            }
+            
+            daysContainer.appendChild(div);
+        }
+        
+        const currentSlots = firstDayIndex + totalDays;
+        const nextMonthDays = 42 - currentSlots;
+        for (let i = 1; i <= nextMonthDays; i++) {
+            const div = document.createElement('div');
+            div.className = 'calendar-day';
+            div.innerText = i;
+            daysContainer.appendChild(div);
+        }
+    };
+
+    window.moveWaypointToDate = function(index, newDate) {
+        routeWaypoints[index].date = newDate;
+        if (routeWaypoints[index].type === 'poi') {
+            routeWaypoints[index].type = 'sight';
+        }
+        renumberWaypoints();
+        renderUI();
+        updateMap();
+        autoSaveTrip();
+    };
+
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -2300,5 +2527,217 @@ if (isset($_SESSION['user_id'])) {
         });
     }
 </script>
+
+<style>
+/* CSS styles for visual insert zones and calendar modal */
+.insert-day-zone {
+    position: relative;
+    height: 12px;
+    margin: -6px 0;
+    z-index: 50;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, height 0.2s ease, margin 0.2s ease;
+}
+.insert-day-zone::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    bottom: -10px;
+    left: 0;
+    right: 0;
+    z-index: 1;
+}
+.insert-day-zone:hover, .insert-day-zone.active {
+    opacity: 1;
+    height: 32px;
+    margin: 4px 0;
+}
+.insert-day-line {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    pointer-events: none;
+}
+.insert-day-btn {
+    position: relative;
+    z-index: 2;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+    transform: scale(0.8);
+    transition: transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.insert-day-zone:hover .insert-day-btn {
+    transform: scale(1);
+}
+
+.delete-day-btn:hover {
+    opacity: 1 !important;
+}
+
+/* Modal Container */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+}
+.modal.show {
+    display: flex;
+}
+.modal-content {
+    background-color: #ffffff;
+    padding: 24px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 360px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border);
+    animation: modalFadeIn 0.2s ease-out;
+}
+@keyframes modalFadeIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 10px;
+}
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.15em;
+    font-family: 'Outfit', sans-serif;
+    color: var(--primary);
+}
+.close-modal {
+    font-size: 20px;
+    font-weight: bold;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: color 0.1s;
+}
+.close-modal:hover {
+    color: #475569;
+}
+.calendar-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.calendar-controls button {
+    background: none;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s;
+}
+.calendar-controls button:hover {
+    background: #f1f5f9;
+    color: var(--primary);
+}
+#calendar-month-year {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 0.95em;
+}
+.calendar-grid-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.75em;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+.calendar-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+.calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85em;
+    border-radius: 8px;
+    cursor: default;
+    color: #cbd5e1;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.calendar-day.current-month {
+    color: #334155;
+}
+.calendar-day.trip-day {
+    background-color: #dbeafe;
+    color: #1e40af;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px dashed #3b82f6;
+}
+.calendar-day.trip-day:hover {
+    background-color: #3b82f6;
+    color: white;
+}
+.calendar-day.active-wp-day {
+    box-shadow: inset 0 0 0 2px #3b82f6;
+}
+</style>
+
+<div id="calendar-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Activiteit verplaatsen</h3>
+            <span class="close-modal" onclick="closeCalendarModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p id="move-wp-name" style="font-weight: 600; margin-bottom: 15px; font-size: 0.9em; color: #475569;"></p>
+            <div class="calendar-controls">
+                <button onclick="changeCalendarMonth(-1)"><i class="fas fa-chevron-left"></i></button>
+                <span id="calendar-month-year"></span>
+                <button onclick="changeCalendarMonth(1)"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="calendar-grid-header">
+                <div>Ma</div><div>Di</div><div>Wo</div><div>Do</div><div>Vr</div><div>Za</div><div>Zo</div>
+            </div>
+            <div id="calendar-days" class="calendar-days-grid"></div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
