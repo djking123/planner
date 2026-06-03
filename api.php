@@ -311,6 +311,41 @@ else if ($action === 'delete') {
     echo json_encode(['success' => true]);
 }
 
+else if ($action === 'rename_trip') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $db = new SQLite3($dbFile);
+    
+    if (!isset($input['old_name']) || !isset($input['new_name'])) {
+        echo json_encode(['success' => false, 'error' => 'Missing old_name or new_name']);
+        $db->close();
+        exit;
+    }
+    
+    $oldName = $input['old_name'];
+    $newName = $input['new_name'];
+    
+    // Check if new name already exists
+    $checkStmt = $db->prepare('SELECT COUNT(*) as count FROM trips WHERE name = :name');
+    $checkStmt->bindValue(':name', $newName, SQLITE3_TEXT);
+    $result = $checkStmt->execute();
+    $row = $result->fetchArray(SQLITE3_ASSOC);
+    
+    if ($row['count'] > 0) {
+        echo json_encode(['success' => false, 'error' => 'Trip name already exists']);
+        $db->close();
+        exit;
+    }
+    
+    // Update the trip name
+    $stmt = $db->prepare('UPDATE trips SET name = :new_name WHERE name = :old_name');
+    $stmt->bindValue(':new_name', $newName, SQLITE3_TEXT);
+    $stmt->bindValue(':old_name', $oldName, SQLITE3_TEXT);
+    $stmt->execute();
+    
+    $db->close();
+    echo json_encode(['success' => true]);
+}
+
 else if ($action === 'upload_gpx') {
     if (!isset($_FILES['gpx'])) {
         echo json_encode(['error' => 'No file uploaded']);
