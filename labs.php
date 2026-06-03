@@ -38,7 +38,7 @@ while ($row = $tables_query->fetchArray(SQLITE3_ASSOC)) {
     while ($col = $cols_query->fetchArray(SQLITE3_ASSOC)) { $cols[] = $col['name']; }
     $row['columns'] = $cols;
     $data = [];
-    $data_query = $db->query("SELECT * FROM $tableName LIMIT 100");
+    $data_query = $db->query("SELECT * FROM $tableName LIMIT 10000");
     while ($item = $data_query->fetchArray(SQLITE3_ASSOC)) { $data[] = $item; }
     $row['data'] = $data;
     $tables[] = $row;
