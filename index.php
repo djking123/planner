@@ -2724,27 +2724,28 @@ if (isset($_SESSION['user_id'])) {
 }
 .insert-day-btn {
     position: relative;
-    z-index: 2;
-    background: #f8fafc;
-    color: #6b7280;
-    border: 1px solid #d1d5db;
-    border-radius: 50%;
-    width: 12px;
-    height: 12px;
-    padding: 0;
-    font-size: 0.65rem;
-    cursor: pointer;
-    box-shadow: none;
-    transform: none;
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.insert-day-btn i {
-    font-size: 0.7rem;
-}
-.insert-day-zone:hover .insert-day-btn {
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 2;
+        background: #f8fafc;
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+        border-radius: 50%;
+        width: 12px;
+        height: 12px;
+        padding: 0;
+        font-size: 0.65rem;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: none;
+        transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .insert-day-btn i {
+        font-size: 0.7rem;
+        line-height: 1;
     background: #f5f7fa;
     border-color: #d1d5db;
     color: #4b5563;
